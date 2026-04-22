@@ -1,3 +1,7 @@
+target/
+*.class
+*.jar
+*.war
 node_modules/
 tictacpro.db
 .env
