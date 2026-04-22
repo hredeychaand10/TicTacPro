@@ -48,17 +48,17 @@ const parsePlayer = (r) => ({
   opponents:      JSON.parse(r.opponents       || '[]'),
 });
 
-const getOrCreate = (name) => {
-  const row = db.prepare('SELECT * FROM players WHERE username = ?').get(name);
-  if (row) return parsePlayer(row);
+const getOrCreate = async (name) => {
+  const result = await db.execute({ sql: 'SELECT * FROM players WHERE username = ?', args: [name] });
+  if (result.rows.length) return parsePlayer(result.rows[0]);
 
   const history = JSON.stringify([{ rating: STARTING_RATING, date: Date.now() }]);
-  db.prepare('INSERT INTO players (username, rating_history) VALUES (?, ?)').run(name, history);
-  const newRow = db.prepare('SELECT * FROM players WHERE username = ?').get(name);
-  return { ...newRow, achievements: [], rating_history: JSON.parse(history), opponents: [] };
+  await db.execute({ sql: 'INSERT INTO players (username, rating_history) VALUES (?, ?)', args: [name, history] });
+  const newResult = await db.execute({ sql: 'SELECT * FROM players WHERE username = ?', args: [name] });
+  return { ...newResult.rows[0], achievements: [], rating_history: JSON.parse(history), opponents: [] };
 };
 
-const savePlayerAfterGame = (player, won, drew, isAI, aiDiff, newRating, opponent, context) => {
+const savePlayerAfterGame = async (player, won, drew, isAI, aiDiff, newRating, opponent, context) => {
   const updated = {
     ...player,
     rating:          newRating,
@@ -85,36 +85,36 @@ const savePlayerAfterGame = (player, won, drew, isAI, aiDiff, newRating, opponen
   const { achievements, unlocked } = processAchievements(updated);
   updated.achievements = achievements;
 
-  db.prepare(`
-    UPDATE players SET
+  await db.execute({
+    sql: `UPDATE players SET
       rating=?, wins=?, losses=?, draws=?, games_played=?,
       current_streak=?, max_streak=?, draw_count=?,
       ai_wins=?, ai_hard_wins=?, ai_hard_streak=?, corner_wins=?,
-      opponents=?, achievements=?, rating_history=?,
-      updated_at=?
-    WHERE username=?
-  `).run(
-    updated.rating, updated.wins, updated.losses, updated.draws, updated.games_played,
-    updated.current_streak, updated.max_streak, updated.draw_count,
-    updated.ai_wins, updated.ai_hard_wins, updated.ai_hard_streak, updated.corner_wins,
-    JSON.stringify(updated.opponents),
-    JSON.stringify(achievements),
-    JSON.stringify(updated.rating_history),
-    Date.now(),
-    player.username
-  );
+      opponents=?, achievements=?, rating_history=?, updated_at=?
+    WHERE username=?`,
+    args: [
+      updated.rating, updated.wins, updated.losses, updated.draws, updated.games_played,
+      updated.current_streak, updated.max_streak, updated.draw_count,
+      updated.ai_wins, updated.ai_hard_wins, updated.ai_hard_streak, updated.corner_wins,
+      JSON.stringify(updated.opponents),
+      JSON.stringify(achievements),
+      JSON.stringify(updated.rating_history),
+      Date.now(),
+      player.username,
+    ],
+  });
 
   return { player: updated, unlocked };
 };
 
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    const totalPlayers = db.prepare('SELECT COUNT(*) AS v FROM players').get().v;
-    const totalGames   = db.prepare('SELECT COUNT(*) AS v FROM games').get().v;
-    const xWins        = db.prepare("SELECT COUNT(*) AS v FROM games WHERE result='X'").get().v;
-    const oWins        = db.prepare("SELECT COUNT(*) AS v FROM games WHERE result='O'").get().v;
-    const draws        = db.prepare("SELECT COUNT(*) AS v FROM games WHERE result='draw'").get().v;
-    const topRating    = db.prepare('SELECT COALESCE(MAX(rating), 1200) AS v FROM players').get().v;
+    const totalPlayers = (await db.execute('SELECT COUNT(*) AS v FROM players')).rows[0].v;
+    const totalGames   = (await db.execute('SELECT COUNT(*) AS v FROM games')).rows[0].v;
+    const xWins        = (await db.execute("SELECT COUNT(*) AS v FROM games WHERE result='X'")).rows[0].v;
+    const oWins        = (await db.execute("SELECT COUNT(*) AS v FROM games WHERE result='O'")).rows[0].v;
+    const draws        = (await db.execute("SELECT COUNT(*) AS v FROM games WHERE result='draw'")).rows[0].v;
+    const topRating    = (await db.execute('SELECT COALESCE(MAX(rating), 1200) AS v FROM players')).rows[0].v;
     res.json({ totalPlayers, totalGames, xWins, oWins, draws, topRating });
   } catch (err) {
     console.error(err);
@@ -122,17 +122,17 @@ router.get('/stats', (req, res) => {
   }
 });
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { username, limit = 200 } = req.query;
   try {
     const cap = Math.min(parseInt(limit) || 200, 1000);
-    let rows;
+    let result;
     if (username) {
-      rows = db.prepare('SELECT * FROM games WHERE player_x = ? OR player_o = ? ORDER BY played_at DESC LIMIT ?').all(username, username, cap);
+      result = await db.execute({ sql: 'SELECT * FROM games WHERE player_x = ? OR player_o = ? ORDER BY played_at DESC LIMIT ?', args: [username, username, cap] });
     } else {
-      rows = db.prepare('SELECT * FROM games ORDER BY played_at DESC LIMIT ?').all(cap);
+      result = await db.execute({ sql: 'SELECT * FROM games ORDER BY played_at DESC LIMIT ?', args: [cap] });
     }
-    res.json(rows.map(g => ({
+    res.json(result.rows.map(g => ({
       id:           g.id,
       playerX:      g.player_x,
       playerO:      g.player_o,
@@ -149,29 +149,30 @@ router.get('/', (req, res) => {
   }
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { playerX, playerO, result, mode, aiDifficulty, moves, duration, playedAt, context } = req.body;
   if (!playerX || !playerO || !result || !mode) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   try {
-    db.prepare(
-      'INSERT INTO games (player_x, player_o, result, mode, ai_difficulty, moves, duration, played_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(playerX, playerO, result, mode, aiDifficulty || null, JSON.stringify(moves || []), duration || 0, playedAt || Date.now());
+    await db.execute({
+      sql: 'INSERT INTO games (player_x, player_o, result, mode, ai_difficulty, moves, duration, played_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [playerX, playerO, result, mode, aiDifficulty || null, JSON.stringify(moves || []), duration || 0, playedAt || Date.now()],
+    });
 
-    const isAI    = mode === 'ai';
-    const scoreX  = result === 'X' ? 1 : result === 'O' ? 0 : 0.5;
+    const isAI     = mode === 'ai';
+    const scoreX   = result === 'X' ? 1 : result === 'O' ? 0 : 0.5;
     const aiRating = aiDifficulty === 'hard' ? 1600 : aiDifficulty === 'medium' ? 1350 : 1100;
 
-    const pX = getOrCreate(playerX);
-    const pO = isAI ? null : getOrCreate(playerO);
+    const pX = await getOrCreate(playerX);
+    const pO = isAI ? null : await getOrCreate(playerO);
 
     const rO   = isAI ? aiRating : pO.rating;
     const gO   = isAI ? 999 : pO.games_played;
     const eloR = calcElo(pX.rating, rO, scoreX, pX.games_played, gO);
 
-    const { unlocked: unlockedX } = savePlayerAfterGame(
+    const { unlocked: unlockedX } = await savePlayerAfterGame(
       pX, result === 'X', result === 'draw', isAI, aiDifficulty, eloR.newA,
       isAI ? null : playerO, context
     );
@@ -179,7 +180,7 @@ router.post('/', (req, res) => {
     let unlockedO = [];
     if (!isAI && pO) {
       const eloO = calcElo(pO.rating, pX.rating, 1 - scoreX, pO.games_played, pX.games_played);
-      const { unlocked } = savePlayerAfterGame(
+      const { unlocked } = await savePlayerAfterGame(
         pO, result === 'O', result === 'draw', false, null, eloO.newA,
         playerX, context
       );

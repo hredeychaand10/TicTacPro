@@ -20,21 +20,21 @@ const formatPlayer = (r) => ({
   updatedAt:     r.updated_at || Date.now(),
 });
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM players WHERE games_played > 0 ORDER BY rating DESC LIMIT 200').all();
-    res.json(rows.map(formatPlayer));
+    const result = await db.execute('SELECT * FROM players WHERE games_played > 0 ORDER BY rating DESC LIMIT 200');
+    res.json(result.rows.map(formatPlayer));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-router.get('/:username', (req, res) => {
+router.get('/:username', async (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM players WHERE username = ?').get(req.params.username);
-    if (!row) return res.status(404).json({ error: 'Player not found' });
-    res.json(formatPlayer(row));
+    const result = await db.execute({ sql: 'SELECT * FROM players WHERE username = ?', args: [req.params.username] });
+    if (!result.rows.length) return res.status(404).json({ error: 'Player not found' });
+    res.json(formatPlayer(result.rows[0]));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
