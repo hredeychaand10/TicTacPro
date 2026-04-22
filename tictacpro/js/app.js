@@ -172,7 +172,7 @@ const App = (() => {
     const gs = Game.getState();
     if (!gs) return `<div class="container" style="padding:80px 0;text-align:center"><p>No active game. <span data-link="lobby" style="color:var(--accent);cursor:pointer">Go to lobby →</span></p></div>`;
 
-    const oName   = gs.isAI ? 'Computer' : gs.playerO;
+    const oName   = gs.playerO;
     const oRating = gs.isAI ? (gs.aiDifficulty === 'hard' ? 1600 : gs.aiDifficulty === 'medium' ? 1350 : 1100) : (gs.ratingO || '—');
     const xRating = gs.ratingX || '—';
 
@@ -357,7 +357,7 @@ const App = (() => {
     $('#start-btn')?.addEventListener('click', async () => {
       const { mode, difficulty, timeControl } = state.lobby;
       const p1Name = $('#p1-input')?.value.trim() || 'Player 1';
-      const p2Name = mode === 'ai' ? 'Computer' : ($('#p2-input')?.value.trim() || 'Player 2');
+      const p2Name = mode === 'ai' ? `Computer (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})` : ($('#p2-input')?.value.trim() || 'Player 2');
       const errEl  = $('#lobby-error');
 
       if (!p1Name) { errEl.textContent = 'Player 1 name is required.'; errEl.classList.remove('hidden'); return; }
