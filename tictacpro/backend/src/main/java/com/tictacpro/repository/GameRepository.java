@@ -24,7 +24,7 @@ public class GameRepository {
         try {
             jdbc.update(
                 "INSERT INTO games (player_x, player_o, result, mode, ai_difficulty, moves, duration, played_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?::jsonb, ?, ?)",
                 playerX, playerO, result, mode, aiDifficulty,
                 mapper.writeValueAsString(moves != null ? moves : new ArrayList<>()),
                 duration, playedAt
