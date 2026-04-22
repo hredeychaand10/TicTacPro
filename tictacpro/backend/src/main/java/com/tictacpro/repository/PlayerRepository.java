@@ -73,7 +73,7 @@ public class PlayerRepository {
     public Player getOrCreate(String username) {
         String history = "[{\"rating\":1200,\"date\":" + System.currentTimeMillis() + "}]";
         jdbc.update(
-            "INSERT INTO players (username, rating_history) VALUES (?, ?::jsonb) ON CONFLICT (username) DO NOTHING",
+            "INSERT OR IGNORE INTO players (username, rating_history) VALUES (?, ?)",
             username, history
         );
         return findByUsername(username).orElseThrow();
@@ -91,8 +91,8 @@ public class PlayerRepository {
             jdbc.update(
                 "UPDATE players SET rating=?, wins=?, losses=?, draws=?, games_played=?, " +
                 "current_streak=?, max_streak=?, draw_count=?, ai_wins=?, ai_hard_wins=?, " +
-                "ai_hard_streak=?, corner_wins=?, opponents=?::jsonb, achievements=?::jsonb, " +
-                "rating_history=?::jsonb, updated_at=? WHERE username=?",
+                "ai_hard_streak=?, corner_wins=?, opponents=?, achievements=?, " +
+                "rating_history=?, updated_at=? WHERE username=?",
                 p.getRating(), p.getWins(), p.getLosses(), p.getDraws(), p.getGamesPlayed(),
                 p.getCurrentStreak(), p.getMaxStreak(), p.getDrawCount(),
                 p.getAiWins(), p.getAiHardWins(), p.getAiHardStreak(), p.getCornerWins(),
