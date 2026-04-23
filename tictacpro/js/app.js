@@ -81,9 +81,10 @@ const App = (() => {
         </div>
       </div>
       <div class="hero-stats">
-        <div class="hero-stats-inner" style="grid-template-columns:repeat(2,1fr)">
+        <div class="hero-stats-inner" style="grid-template-columns:repeat(3,1fr)">
           <div><div class="hero-stat-num">${s.totalGames.toLocaleString()}</div><div class="hero-stat-label">Games Played</div></div>
           <div><div class="hero-stat-num">${s.totalPlayers.toLocaleString()}</div><div class="hero-stat-label">Players</div></div>
+          <div><div class="hero-stat-num">${s.topRating||1200}</div><div class="hero-stat-label">Top Rating</div></div>
         </div>
       </div>
     </div>
